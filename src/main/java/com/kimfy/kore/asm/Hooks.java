@@ -3,6 +3,7 @@ package com.kimfy.kore.asm;
 import net.minecraft.block.Block;
 import net.minecraft.block.BlockFence;
 import net.minecraft.block.BlockFenceGate;
+import net.minecraft.block.BlockWall;
 import net.minecraft.block.material.Material;
 import net.minecraft.init.Blocks;
 import net.minecraft.util.BlockPos;
@@ -26,10 +27,10 @@ public class Hooks
         return true;
     }
 
-    public static boolean canWallConnectTo(Block wall, IBlockAccess world, BlockPos pos)
+    public static boolean canWallConnectTo(IBlockAccess world, BlockPos pos)
     {
         Block block = world.getBlockState(pos).getBlock();
-        return block == Blocks.barrier ? false : (block != wall && !(block instanceof BlockFenceGate) ? (block.getMaterial().isOpaque() && block.isFullCube() ? block.getMaterial() != Material.gourd : false) : true);
+        return block == Blocks.barrier ? false : (!(block instanceof BlockWall) && !(block instanceof BlockFenceGate) ? (block.getMaterial().isOpaque() && block.isFullCube() ? block.getMaterial() != Material.gourd : false) : true);
     }
 }
 

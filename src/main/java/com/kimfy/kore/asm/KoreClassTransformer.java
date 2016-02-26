@@ -105,28 +105,12 @@ public class KoreClassTransformer implements IClassTransformer
     /**
      * Transforms the BlockWall class' canConnectTo method
      * so that it returns true when asking to connect to
-     * any fence that is an instanceof BlockFence.
-     * <p/>
-     * Removes 'block.getMaterial() != this.blockMaterial'
-     * from the ternary check.
-     * <p/>
-     * What the method will look like after transforming is done:
-     * <p/>
-     * public boolean canConnectToOriginal(IBlockAccess worldIn, BlockPos pos)
-     * {
-     * if (Hooks.isFenceCompatibilityEnabled())
-     * {
-     * return Hooks.canFenceConnectTo(worldIn, pos);
-     * }
-     * Block block = worldIn.getBlockState(pos).getBlock();
-     * return block == Blocks.barrier ? false : ((!(block instanceof BlockFence) || block.getMaterial() != this.blockMaterial) && !(block instanceof BlockFenceGate) ? (block.getMaterial().isOpaque() && block.isFullCube() ? block.getMaterial() != Material.gourd : false) : true);
-     * }
+     * any fence that is an instanceof BlockWall
      */
     private static void transformBlockWall(ClassNode classNode, boolean isObfuscated)
     {
         final String CAN_CONNECT_TO = isObfuscated ? "func_176253_e" : "canConnectTo";
         final String CAN_CONNECT_TO_DESC = isObfuscated ? "(Ladq;Lcj;)Z" : "(Lnet/minecraft/world/IBlockAccess;Lnet/minecraft/util/BlockPos;)Z";
-        final String CAN_CONNECT_TO_DESC_HOOKS = isObfuscated ? "(Lafh;Lcj;)Z" : "(Lnet/minecraft/block/Block;Lnet/minecraft/world/IBlockAccess;Lnet/minecraft/util/BlockPos;)Z" ;
 
         for (MethodNode method : classNode.methods)
         {
@@ -138,10 +122,9 @@ public class KoreClassTransformer implements IClassTransformer
                 method.instructions.insertBefore(L0, L2);
                 method.instructions.insertBefore(L0, new MethodInsnNode(Opcodes.INVOKESTATIC, Type.getInternalName(Hooks.class), "isFenceCompatibilityEnabled", "()Z", false));
                 method.instructions.insertBefore(L0, new JumpInsnNode(Opcodes.IFEQ, L0));
-                method.instructions.insertBefore(L0, new VarInsnNode(Opcodes.ALOAD, 0));
                 method.instructions.insertBefore(L0, new VarInsnNode(Opcodes.ALOAD, 1));
                 method.instructions.insertBefore(L0, new VarInsnNode(Opcodes.ALOAD, 2));
-                method.instructions.insertBefore(L0, new MethodInsnNode(Opcodes.INVOKESTATIC, Type.getInternalName(Hooks.class), "canWallConnectTo", CAN_CONNECT_TO_DESC_HOOKS, false));
+                method.instructions.insertBefore(L0, new MethodInsnNode(Opcodes.INVOKESTATIC, Type.getInternalName(Hooks.class), "canWallConnectTo", CAN_CONNECT_TO_DESC, false));
                 method.instructions.insertBefore(L0, new InsnNode(Opcodes.IRETURN));
                 method.instructions.insertBefore(L0, new FrameNode(Opcodes.F_SAME, 0, null, 0, null));
 
