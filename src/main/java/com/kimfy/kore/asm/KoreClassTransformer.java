@@ -9,13 +9,16 @@ import org.objectweb.asm.Type;
 import org.objectweb.asm.tree.*;
 
 import java.util.Arrays;
+import java.util.function.Function;
+import java.util.function.Predicate;
 
 public class KoreClassTransformer implements IClassTransformer
 {
     public static String[] classes =
             {
                     "net.minecraft.block.BlockFence",
-                    "net.minecraft.block.BlockWall"
+                    "net.minecraft.block.BlockWall",
+                    "net.minecraft.block.BlockIce"
             };
 
     @Override
@@ -42,6 +45,9 @@ public class KoreClassTransformer implements IClassTransformer
                     break;
                 case 1:
                     transformBlockWall(classNode, isObfuscated);
+                    break;
+                case 2:
+                    transformBlockIce(classNode, isObfuscated);
                     break;
             }
 
@@ -131,5 +137,51 @@ public class KoreClassTransformer implements IClassTransformer
                 Constants.logger.info("Transformed: BlockWall.class");
             }
         }
+    }
+
+    private static void transformBlockIce(ClassNode classNode, boolean isObfuscated)
+    {
+        final String UPDATE_TICK = isObfuscated ? "func_180650_b" : "updateTick";
+        final String UPDATE_TICK_DESC = isObfuscated ? "(Ladm;Lcj;Lalz;Ljava/util/Random;)V" : "(Lnet/minecraft/world/World;Lnet/minecraft/util/BlockPos;Lnet/minecraft/block/state/IBlockState;Ljava/util/Random;)V";
+
+        for (MethodNode method : classNode.methods)
+        {
+            if (method.name.equals(UPDATE_TICK) && method.desc.equals(UPDATE_TICK_DESC))
+            {
+                if (method.instructions.size() != 48)
+                {
+                    Constants.logger.error("Someone already modified BlockIce.updateTick(). Skipping to avoid conflicts/crashes!");
+                }
+
+                LabelNode L1 = (LabelNode) getSpecificNode(method.instructions, (n) -> n.getOpcode() == Opcodes.RETURN).getPrevious().getPrevious().getPrevious();
+                AbstractInsnNode targetNode = getSpecificNode(method.instructions, (n) -> n instanceof FrameNode && n.getNext().getOpcode() == Opcodes.ALOAD).getNext();
+                // ALOAD 1
+                AbstractInsnNode dropTargetNode = getSpecificNode(method.instructions, (n) -> n.getOpcode() == Opcodes.GETSTATIC && n.getNext().getOpcode() == Opcodes.INVOKEVIRTUAL && n.getNext().getNext().getOpcode() == Opcodes.INVOKEVIRTUAL).getPrevious().getPrevious();
+
+                for (int i = 0; i < 5; i++)
+                {
+                    dropTargetNode = dropTargetNode.getNext();
+                    method.instructions.remove(dropTargetNode.getPrevious());
+                }
+                InsnList instructions = new InsnList();
+                method.instructions.insertBefore(targetNode, new MethodInsnNode(Opcodes.INVOKESTATIC, Type.getInternalName(Hooks.class), "canIceMelt", "()Z", false));
+                instructions.add(new VarInsnNode(Opcodes.ALOAD, 1));
+                instructions.add(new VarInsnNode(Opcodes.ALOAD, 2));
+                instructions.add(new MethodInsnNode(Opcodes.INVOKESTATIC, Type.getInternalName(Hooks.class), "getLiquidDropForIce", "()Lnet/minecraft/block/state/IBlockState;", false));
+                instructions.add(new MethodInsnNode(Opcodes.INVOKEVIRTUAL, isObfuscated ? "adm" : "net/minecraft/world/World", isObfuscated ? "func_175656_a" : "setBlockState", isObfuscated ? "(Lnet/minecraft/util/BlockPos;Lnet/minecraft/block/state/IBlockState;)Z" : "(Lnet/minecraft/util/BlockPos;Lnet/minecraft/block/state/IBlockState;)Z", false));
+                method.instructions.insertBefore(dropTargetNode, instructions);
+                method.instructions.insertBefore(targetNode, new JumpInsnNode(Opcodes.IFEQ, L1));
+                Constants.logger.info("Transformed: BlockIce.class");
+            }
+        }
+    }
+
+    private static AbstractInsnNode getSpecificNode(InsnList instructions, Predicate<AbstractInsnNode> predicate)
+    {
+        return Arrays.asList(instructions.toArray())
+                .stream()
+                .filter(predicate::test)
+                .findFirst()
+                .orElseGet(null);
     }
 }
