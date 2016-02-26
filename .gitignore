@@ -1,0 +1,27 @@
+
+## gradle
+/.gradle
+/build
+
+## ForgeGradle
+/run
+/out
+/mcp
+
+## IDE
+/eclipse
+/.settings
+/.metadata
+/.classpath
+/.project
+/bin
+*.iml
+*.ipr
+*.iws
+/.idea
+
+## libs
+/libs/*sources
+/libs/*src
+/libs/*javadoc
+.DS_Store
