@@ -1,7 +1,11 @@
 package com.kimfy.kore.asm;
 
 import com.kimfy.kore.util.Constants;
+import net.minecraft.block.Block;
+import net.minecraft.block.state.IBlockState;
 import net.minecraft.launchwrapper.IClassTransformer;
+import net.minecraft.util.BlockPos;
+import net.minecraft.world.World;
 import org.objectweb.asm.ClassReader;
 import org.objectweb.asm.ClassWriter;
 import org.objectweb.asm.Opcodes;
@@ -9,8 +13,7 @@ import org.objectweb.asm.Type;
 import org.objectweb.asm.tree.*;
 
 import java.util.Arrays;
-import java.util.function.Function;
-import java.util.function.Predicate;
+import java.util.Random;
 
 public class KoreClassTransformer implements IClassTransformer
 {
@@ -82,6 +85,9 @@ public class KoreClassTransformer implements IClassTransformer
      *         return block == Blocks.barrier ? false : ((!(block instanceof BlockFence) || block.getMaterial() != this.blockMaterial) && !(block instanceof BlockFenceGate) ? (block.getMaterial().isOpaque() && block.isFullCube() ? block.getMaterial() != Material.gourd : false) : true);
      *     }
      * </pre>
+     *
+     * @param classNode The {@link ClassNode} to manipulate
+     * @param isObfuscated Whether or not we're in a obfuscated or deobfuscated environment
      */
     private static void transformBlockFence(ClassNode classNode, boolean isObfuscated)
     {
@@ -112,6 +118,9 @@ public class KoreClassTransformer implements IClassTransformer
      * Transforms the BlockWall class' canConnectTo method
      * so that it returns true when asking to connect to
      * any fence that is an instanceof BlockWall
+     *
+     * @param classNode The {@link ClassNode} to manipulate
+     * @param isObfuscated Whether or not we're in a obfuscated or deobfuscated environment
      */
     private static void transformBlockWall(ClassNode classNode, boolean isObfuscated)
     {
@@ -139,10 +148,21 @@ public class KoreClassTransformer implements IClassTransformer
         }
     }
 
+    /**
+     * Replaces {@link net.minecraft.block.BlockIce#updateTick(World, BlockPos, IBlockState, Random)}
+     * method instructions with {@link Hooks#updateTick(Block, World, BlockPos, IBlockState, Random)}
+     * by removing all instructions from the method and inserting new instructions equivalent with a
+     * invokation on the new method.
+     *
+     * @param classNode The {@link ClassNode} to manipulate
+     * @param isObfuscated Whether or not we're in a obfuscated or deobfuscated environment
+     */
     private static void transformBlockIce(ClassNode classNode, boolean isObfuscated)
     {
         final String UPDATE_TICK = isObfuscated ? "func_180650_b" : "updateTick";
-        final String UPDATE_TICK_DESC = isObfuscated ? "(Ladm;Lcj;Lalz;Ljava/util/Random;)V" : "(Lnet/minecraft/world/World;Lnet/minecraft/util/BlockPos;Lnet/minecraft/block/state/IBlockState;Ljava/util/Random;)V";
+        final String UPDATE_TICK_DESC = isObfuscated ?
+                "(Ladm;Lcj;Lalz;Ljava/util/Random;)V" :
+                "(Lnet/minecraft/world/World;Lnet/minecraft/util/BlockPos;Lnet/minecraft/block/state/IBlockState;Ljava/util/Random;)V";
 
         for (MethodNode method : classNode.methods)
         {
@@ -153,35 +173,23 @@ public class KoreClassTransformer implements IClassTransformer
                     Constants.logger.error("Someone already modified BlockIce.updateTick(). Skipping to avoid conflicts/crashes!");
                 }
 
-                LabelNode L1 = (LabelNode) getSpecificNode(method.instructions, (n) -> n.getOpcode() == Opcodes.RETURN).getPrevious().getPrevious().getPrevious();
-                AbstractInsnNode targetNode = getSpecificNode(method.instructions, (n) -> n instanceof FrameNode && n.getNext().getOpcode() == Opcodes.ALOAD).getNext();
-                // ALOAD 1
-                AbstractInsnNode dropTargetNode = getSpecificNode(method.instructions, (n) -> n.getOpcode() == Opcodes.GETSTATIC && n.getNext().getOpcode() == Opcodes.INVOKEVIRTUAL && n.getNext().getNext().getOpcode() == Opcodes.INVOKEVIRTUAL).getPrevious().getPrevious();
+                method.instructions.clear();
+                final String HOOKS_UPDATE_TICK_DESC = isObfuscated ?
+                        "(Lafh;Ladm;Lcj;Lalz;Ljava/util/Random;)V" :
+                        "(Lnet/minecraft/block/Block;Lnet/minecraft/world/World;Lnet/minecraft/util/BlockPos;Lnet/minecraft/block/state/IBlockState;Ljava/util/Random;)V";
 
-                for (int i = 0; i < 5; i++)
-                {
-                    dropTargetNode = dropTargetNode.getNext();
-                    method.instructions.remove(dropTargetNode.getPrevious());
-                }
                 InsnList instructions = new InsnList();
-                method.instructions.insertBefore(targetNode, new MethodInsnNode(Opcodes.INVOKESTATIC, Type.getInternalName(Hooks.class), "canIceMelt", "()Z", false));
-                instructions.add(new VarInsnNode(Opcodes.ALOAD, 1));
-                instructions.add(new VarInsnNode(Opcodes.ALOAD, 2));
-                instructions.add(new MethodInsnNode(Opcodes.INVOKESTATIC, Type.getInternalName(Hooks.class), "getLiquidDropForIce", "()Lnet/minecraft/block/state/IBlockState;", false));
-                instructions.add(new MethodInsnNode(Opcodes.INVOKEVIRTUAL, isObfuscated ? "adm" : "net/minecraft/world/World", isObfuscated ? "func_175656_a" : "setBlockState", isObfuscated ? "(Lnet/minecraft/util/BlockPos;Lnet/minecraft/block/state/IBlockState;)Z" : "(Lnet/minecraft/util/BlockPos;Lnet/minecraft/block/state/IBlockState;)Z", false));
-                method.instructions.insertBefore(dropTargetNode, instructions);
-                method.instructions.insertBefore(targetNode, new JumpInsnNode(Opcodes.IFEQ, L1));
+                instructions.add(new LabelNode());
+                instructions.add(new VarInsnNode(Opcodes.ALOAD, 0)); // BlockIce
+                instructions.add(new VarInsnNode(Opcodes.ALOAD, 1)); // World
+                instructions.add(new VarInsnNode(Opcodes.ALOAD, 2)); // BlockPos
+                instructions.add(new VarInsnNode(Opcodes.ALOAD, 3)); // IBlockState
+                instructions.add(new VarInsnNode(Opcodes.ALOAD, 4)); // Random
+                instructions.add(new MethodInsnNode(Opcodes.INVOKESTATIC, Type.getInternalName(Hooks.class), "updateTick", HOOKS_UPDATE_TICK_DESC, false));
+                instructions.add(new InsnNode(Opcodes.RETURN));
+                method.instructions.insert(instructions);
                 Constants.logger.info("Transformed: BlockIce.class");
             }
         }
-    }
-
-    private static AbstractInsnNode getSpecificNode(InsnList instructions, Predicate<AbstractInsnNode> predicate)
-    {
-        return Arrays.asList(instructions.toArray())
-                .stream()
-                .filter(predicate::test)
-                .findFirst()
-                .orElseGet(null);
     }
 }

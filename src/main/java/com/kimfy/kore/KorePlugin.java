@@ -5,7 +5,7 @@ import net.minecraftforge.fml.relauncher.IFMLLoadingPlugin;
 import java.util.Map;
 
 @IFMLLoadingPlugin.MCVersion("1.8.9")
-@IFMLLoadingPlugin.TransformerExclusions({"com.kimfy.kore", "com.kimfy.kore.asm"})
+@IFMLLoadingPlugin.TransformerExclusions({"com.kimfy.kore.asm"})
 public class KorePlugin implements IFMLLoadingPlugin
 {
     @Override
